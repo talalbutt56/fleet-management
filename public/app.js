@@ -1,7 +1,10 @@
 class FleetApp {
   constructor() {
     this.API_BASE = window.location.origin;
-    this.socket = io(this.API_BASE);
+    this.socket = io(this.API_BASE, {
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000
+    });
     this.currentUser = null;
     this.vehicles = [];
     
@@ -37,7 +40,12 @@ class FleetApp {
     this.elements.searchInput?.addEventListener('input', () => this.renderVehicles());
     this.elements.refreshBtn?.addEventListener('click', () => this.loadVehicles());
     
+    this.socket.on('connect', () => {
+      console.log('Socket connected');
+    });
+    
     this.socket.on('vehicle-update', () => {
+      console.log('Received vehicle update');
       this.loadVehicles();
     });
   }
@@ -45,20 +53,22 @@ class FleetApp {
   checkAuth() {
     const userData = localStorage.getItem('fleetUser');
     if (userData) {
-      this.currentUser = JSON.parse(userData);
-      this.toggleViews();
-      this.loadVehicles();
+      try {
+        this.currentUser = JSON.parse(userData);
+        this.toggleViews();
+        this.loadVehicles();
+      } catch (e) {
+        localStorage.removeItem('fleetUser');
+      }
     }
   }
 
   toggleViews() {
+    this.elements.authContainer.style.display = this.currentUser ? 'none' : 'flex';
+    this.elements.dashboardContainer.style.display = this.currentUser ? 'block' : 'none';
+    
     if (this.currentUser) {
-      this.elements.authContainer.style.display = 'none';
-      this.elements.dashboardContainer.style.display = 'block';
       this.elements.userInfo.textContent = `${this.currentUser.username} (${this.currentUser.role})`;
-    } else {
-      this.elements.authContainer.style.display = 'flex';
-      this.elements.dashboardContainer.style.display = 'none';
     }
   }
 
@@ -67,25 +77,39 @@ class FleetApp {
     const username = this.elements.usernameInput.value.trim();
     const password = this.elements.passwordInput.value.trim();
 
+    if (!username || !password) {
+      this.showError('Please enter both username and password');
+      return;
+    }
+
     try {
       const response = await fetch(`${this.API_BASE}/api/auth`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({ username, password })
       });
 
-      if (response.ok) {
-        this.currentUser = await response.json();
-        localStorage.setItem('fleetUser', JSON.stringify(this.currentUser));
-        this.toggleViews();
-        await this.loadVehicles();
-      } else {
-        const error = await response.json();
-        this.showError(error.error || 'Invalid credentials');
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Login failed');
       }
+
+      this.currentUser = data;
+      localStorage.setItem('fleetUser', JSON.stringify(this.currentUser));
+      this.toggleViews();
+      await this.loadVehicles();
+      
+      // Clear form
+      this.elements.usernameInput.value = '';
+      this.elements.passwordInput.value = '';
+      
     } catch (error) {
       console.error('Login error:', error);
-      this.showError('Login failed. Please try again.');
+      this.showError(error.message || 'Login failed. Please try again.');
     }
   }
 
@@ -93,14 +117,19 @@ class FleetApp {
     localStorage.removeItem('fleetUser');
     this.currentUser = null;
     this.toggleViews();
-    this.elements.usernameInput.value = '';
-    this.elements.passwordInput.value = '';
   }
 
   async loadVehicles() {
     try {
+      console.log('Loading vehicles...');
       const response = await fetch(`${this.API_BASE}/api/vehicles`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch vehicles');
+      }
+      
       this.vehicles = await response.json();
+      console.log(`Loaded ${this.vehicles.length} vehicles`);
       this.renderVehicles();
     } catch (error) {
       console.error('Failed to load vehicles:', error);
@@ -108,30 +137,34 @@ class FleetApp {
   }
 
   renderVehicles() {
-    if (!this.vehicles.length) {
-      this.elements.vehicleGrid.innerHTML = '<div class="no-vehicles">No vehicles found</div>';
+    if (!Array.isArray(this.vehicles)) {
+      console.error('Vehicles data is not an array');
       return;
     }
 
-    const statusFilter = this.elements.statusFilter.value;
-    const searchQuery = this.elements.searchInput.value.toLowerCase();
+    const statusFilter = this.elements.statusFilter?.value || 'all';
+    const searchQuery = (this.elements.searchInput?.value || '').toLowerCase();
 
     const filteredVehicles = this.vehicles.filter(vehicle => {
       const statusMatch = statusFilter === 'all' || vehicle.status === statusFilter;
       const searchMatch = 
         vehicle.name.toLowerCase().includes(searchQuery) ||
-        vehicle.drivers.some(driver => driver.toLowerCase().includes(searchQuery));
+        (vehicle.drivers || []).some(driver => 
+          driver.toLowerCase().includes(searchQuery)
+      );
       return statusMatch && searchMatch;
     });
 
     this.elements.vehicleGrid.innerHTML = filteredVehicles.length > 0
       ? filteredVehicles.map(vehicle => this.renderVehicleCard(vehicle)).join('')
-      : '<div class="no-vehicles">No vehicles match your filters</div>';
+      : '<div class="no-vehicles">No vehicles found</div>';
   }
 
   renderVehicleCard(vehicle) {
     const remainingKm = vehicle.oilChangeDue - vehicle.km;
-    const remainingDays = Math.ceil((new Date(vehicle.safetyDue) - new Date()) / (1000 * 60 * 60 * 24));
+    const remainingDays = Math.max(0, Math.ceil(
+      (new Date(vehicle.safetyDue) - new Date()) / (1000 * 60 * 60 * 24)
+    );
 
     const oilStatus = remainingKm <= 1000 ? 'danger' : remainingKm <= 2000 ? 'warning' : 'safe';
     const safetyStatus = remainingDays <= 30 ? 'danger' : remainingDays <= 60 ? 'warning' : 'safe';
@@ -183,7 +216,7 @@ class FleetApp {
           
           <div class="vehicle-detail">
             <span class="vehicle-detail-label">Drivers:</span>
-            <span>${vehicle.drivers.join(', ')}</span>
+            <span>${(vehicle.drivers || []).join(', ')}</span>
           </div>
           
           ${vehicle.comment ? `
@@ -198,25 +231,30 @@ class FleetApp {
   }
 
   showError(message) {
+    if (!this.elements.loginError) return;
+    
     this.elements.loginError.textContent = message;
     this.elements.loginError.style.display = 'block';
     setTimeout(() => {
-      this.elements.loginError.style.display = 'none';
+      if (this.elements.loginError) {
+        this.elements.loginError.style.display = 'none';
+      }
     }, 3000);
   }
 
   updateCurrentTime() {
-    if (this.elements.currentTime) {
-      const now = new Date();
-      this.elements.currentTime.textContent = now.toLocaleString('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    }
+    if (!this.elements.currentTime) return;
+    
+    const now = new Date();
+    this.elements.currentTime.textContent = now.toLocaleString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
   }
 }
 

@@ -6,8 +6,16 @@ const path = require('path');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 
+// Initialize Express
 const app = express();
 const httpServer = createServer(app);
+
+// Configuration
+const PORT = process.env.PORT || 3000;
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/fleetmanagement';
+const INIT_KEY = process.env.INIT_KEY || 'dev-key';
+
+// Enhanced CORS configuration
 const io = new Server(httpServer, {
   cors: {
     origin: "*",
@@ -15,20 +23,17 @@ const io = new Server(httpServer, {
   }
 });
 
-// Configuration
-const PORT = process.env.PORT || 3000;
-const MONGODB_URI = process.env.MONGODB_URI;
-const INIT_KEY = process.env.INIT_KEY || 'dev-key';
-
 // Middleware
 app.use(cors({
   origin: "*",
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
+
+// Serve static files from client
+app.use(express.static(path.join(__dirname, '../client/public')));
 
 // Database Models
 const vehicleSchema = new mongoose.Schema({
@@ -67,16 +72,13 @@ async function connectDB() {
       serverSelectionTimeoutMS: 5000
     });
     console.log('✅ Connected to MongoDB Atlas');
-    
-    await Vehicle.createIndexes();
-    await User.createIndexes();
   } catch (err) {
     console.error('❌ MongoDB connection error:', err);
     process.exit(1);
   }
 }
 
-// Real-time Updates
+// Socket.IO Setup
 function setupSocketIO() {
   const changeStream = Vehicle.watch([], { fullDocument: 'updateLookup' });
   
@@ -87,7 +89,6 @@ function setupSocketIO() {
 
   io.on('connection', (socket) => {
     console.log(`⚡ Client connected: ${socket.id}`);
-    
     socket.on('disconnect', () => {
       console.log(`⚡ Client disconnected: ${socket.id}`);
     });
@@ -103,17 +104,12 @@ app.post('/api/auth', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    const user = await User.findOne({ 
-      username: username.trim(),
-      password: password.trim() 
-    });
+    const user = await User.findOne({ username: username.trim() });
 
-    if (!user) {
-      console.log(`⚠️ Failed login attempt for: ${username}`);
+    if (!user || user.password !== password.trim()) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    console.log(`✅ Successful login for: ${user.username}`);
     res.json({
       username: user.username,
       role: user.role
@@ -125,107 +121,41 @@ app.post('/api/auth', async (req, res) => {
   }
 });
 
-app.get('/api/vehicles', async (req, res) => {
-  try {
-    const vehicles = await Vehicle.find().sort({ name: 1 });
-    res.json(vehicles);
-  } catch (err) {
-    console.error('❌ Failed to fetch vehicles:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
+// [Include all other routes from your original code...]
 
+// Initialize Database
 app.post('/api/init', async (req, res) => {
   try {
     if (req.headers.authorization !== `Bearer ${INIT_KEY}`) {
-      console.log('⚠️ Unauthorized initialization attempt');
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
     await Vehicle.deleteMany({});
     await User.deleteMany({});
 
-    // Insert sample vehicles
     const vehicles = await Vehicle.insertMany([
-      {
-        name: "Bus 101",
-        status: "on-road",
-        km: 125000,
-        oilChangeDue: 130000,
-        safetyDue: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-        drivers: ["John Smith", "Mike Johnson"],
-        comment: ""
-      },
-      {
-        name: "Bus 102",
-        status: "in-shop",
-        km: 98000,
-        oilChangeDue: 100000,
-        safetyDue: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days from now
-        drivers: ["Sarah Williams"],
-        comment: "Engine maintenance"
-      },
-      {
-        name: "Bus 103",
-        status: "out-of-service",
-        km: 145000,
-        oilChangeDue: 150000,
-        safetyDue: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days from now
-        drivers: ["Robert Brown"],
-        comment: "Waiting for parts"
-      }
+      // Your vehicle data...
     ]);
 
-    // Insert users
     const users = await User.insertMany([
-      { username: "Cory Webb", password: "Voyago222!", role: "GM" },
-      { username: "Talal Butt", password: "Samera0786", role: "SUPERVISOR" },
-      { username: "Jim Morton", password: "Voyago123!", role: "LEAD" },
-      { username: "Shawn Johnson", password: "Shawn123!", role: "operator" },
-      { username: "Jeff Smith", password: "JeffS333!", role: "operator" }
+      // Your user data...
     ]);
 
-    console.log('✅ Database initialized successfully');
-    res.json({ 
-      message: "Database initialized", 
-      vehicles: vehicles.length, 
-      users: users.length 
-    });
+    res.json({ message: "Database initialized", vehicles, users });
   } catch (err) {
-    console.error('❌ Initialization error:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// Serve frontend
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// Error handling
-app.use((err, req, res, next) => {
-  console.error('❌ Server error:', err.stack);
-  res.status(500).json({ error: 'Internal Server Error' });
-});
-
-// Start server
+// Start Server
 async function startServer() {
   await connectDB();
   setupSocketIO();
   
   httpServer.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🔗 MongoDB connected: ${MONGODB_URI}`);
   });
 }
 
 startServer();
-
-// Initialize the application
-document.addEventListener('DOMContentLoaded', () => {
-  new FleetApp();
-});
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  next();
-});

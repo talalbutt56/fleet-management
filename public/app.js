@@ -1,15 +1,18 @@
 class FleetApp {
   constructor() {
     this.API_BASE = window.location.origin;
-    this.socket = io(this.API_BASE, {
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000
-    });
+    this.socket = null;
     this.currentUser = null;
     this.vehicles = [];
+    this.isLoading = false;
     
+    this.init();
+  }
+
+  async init() {
     this.initElements();
     this.initEventListeners();
+    this.initSocket();
     this.checkAuth();
     this.updateCurrentTime();
     setInterval(() => this.updateCurrentTime(), 1000);
@@ -29,7 +32,8 @@ class FleetApp {
       vehicleGrid: document.getElementById('vehicle-grid'),
       statusFilter: document.getElementById('status-filter'),
       searchInput: document.getElementById('search-input'),
-      refreshBtn: document.getElementById('refresh-btn')
+      refreshBtn: document.getElementById('refresh-btn'),
+      loginBtn: document.querySelector('#login-form button[type="submit"]')
     };
   }
 
@@ -39,41 +43,58 @@ class FleetApp {
     this.elements.statusFilter?.addEventListener('change', () => this.renderVehicles());
     this.elements.searchInput?.addEventListener('input', () => this.renderVehicles());
     this.elements.refreshBtn?.addEventListener('click', () => this.loadVehicles());
-    
+  }
+
+  initSocket() {
+    this.socket = io(this.API_BASE, {
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000
+    });
+
     this.socket.on('connect', () => {
       console.log('Socket connected');
     });
-    
+
     this.socket.on('vehicle-update', () => {
       console.log('Received vehicle update');
       this.loadVehicles();
     });
+
+    this.socket.on('disconnect', () => {
+      console.log('Socket disconnected');
+    });
   }
 
   checkAuth() {
-    const userData = localStorage.getItem('fleetUser');
-    if (userData) {
-      try {
+    try {
+      const userData = localStorage.getItem('fleetUser');
+      if (userData) {
         this.currentUser = JSON.parse(userData);
         this.toggleViews();
         this.loadVehicles();
-      } catch (e) {
-        localStorage.removeItem('fleetUser');
       }
+    } catch (e) {
+      console.error('Failed to parse user data:', e);
+      localStorage.removeItem('fleetUser');
     }
   }
 
   toggleViews() {
-    this.elements.authContainer.style.display = this.currentUser ? 'none' : 'flex';
-    this.elements.dashboardContainer.style.display = this.currentUser ? 'block' : 'none';
-    
     if (this.currentUser) {
+      this.elements.authContainer.style.display = 'none';
+      this.elements.dashboardContainer.style.display = 'block';
       this.elements.userInfo.textContent = `${this.currentUser.username} (${this.currentUser.role})`;
+    } else {
+      this.elements.authContainer.style.display = 'flex';
+      this.elements.dashboardContainer.style.display = 'none';
     }
   }
 
   async handleLogin(e) {
     e.preventDefault();
+    
+    if (this.isLoading) return;
+    
     const username = this.elements.usernameInput.value.trim();
     const password = this.elements.passwordInput.value.trim();
 
@@ -81,6 +102,11 @@ class FleetApp {
       this.showError('Please enter both username and password');
       return;
     }
+
+    this.isLoading = true;
+    const originalBtnText = this.elements.loginBtn.innerHTML;
+    this.elements.loginBtn.disabled = true;
+    this.elements.loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging in...';
 
     try {
       const response = await fetch(`${this.API_BASE}/api/auth`, {
@@ -92,24 +118,28 @@ class FleetApp {
         body: JSON.stringify({ username, password })
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
+      if (!response.ok || !data?.username) {
+        throw new Error(data?.error || 'Invalid server response');
       }
 
       this.currentUser = data;
       localStorage.setItem('fleetUser', JSON.stringify(this.currentUser));
-      this.toggleViews();
-      await this.loadVehicles();
       
-      // Clear form
+      // Clear form and reload to ensure clean state
       this.elements.usernameInput.value = '';
       this.elements.passwordInput.value = '';
+      window.location.reload();
       
     } catch (error) {
       console.error('Login error:', error);
       this.showError(error.message || 'Login failed. Please try again.');
+      this.elements.passwordInput.value = '';
+    } finally {
+      this.isLoading = false;
+      this.elements.loginBtn.disabled = false;
+      this.elements.loginBtn.innerHTML = originalBtnText;
     }
   }
 
@@ -121,7 +151,6 @@ class FleetApp {
 
   async loadVehicles() {
     try {
-      console.log('Loading vehicles...');
       const response = await fetch(`${this.API_BASE}/api/vehicles`);
       
       if (!response.ok) {
@@ -129,7 +158,6 @@ class FleetApp {
       }
       
       this.vehicles = await response.json();
-      console.log(`Loaded ${this.vehicles.length} vehicles`);
       this.renderVehicles();
     } catch (error) {
       console.error('Failed to load vehicles:', error);
@@ -139,6 +167,7 @@ class FleetApp {
   renderVehicles() {
     if (!Array.isArray(this.vehicles)) {
       console.error('Vehicles data is not an array');
+      this.elements.vehicleGrid.innerHTML = '<div class="no-vehicles">Failed to load vehicles</div>';
       return;
     }
 
@@ -151,7 +180,7 @@ class FleetApp {
         vehicle.name.toLowerCase().includes(searchQuery) ||
         (vehicle.drivers || []).some(driver => 
           driver.toLowerCase().includes(searchQuery)
-      );
+        );
       return statusMatch && searchMatch;
     });
 
@@ -164,7 +193,7 @@ class FleetApp {
     const remainingKm = vehicle.oilChangeDue - vehicle.km;
     const remainingDays = Math.max(0, Math.ceil(
       (new Date(vehicle.safetyDue) - new Date()) / (1000 * 60 * 60 * 24)
-    );
+    ));
 
     const oilStatus = remainingKm <= 1000 ? 'danger' : remainingKm <= 2000 ? 'warning' : 'safe';
     const safetyStatus = remainingDays <= 30 ? 'danger' : remainingDays <= 60 ? 'warning' : 'safe';
@@ -206,7 +235,7 @@ class FleetApp {
             </div>
             <div class="progress-bar">
               <div class="progress-fill progress-${safetyStatus}" 
-                   style="width: ${Math.min(100, (1 - (remainingDays / 90)) * 100}%"></div>
+                   style="width: ${Math.min(100, (1 - (remainingDays / 90)) * 100)}%"></div>
             </div>
             <div class="progress-label">
               <span>Remaining:</span>
@@ -239,7 +268,7 @@ class FleetApp {
       if (this.elements.loginError) {
         this.elements.loginError.style.display = 'none';
       }
-    }, 3000);
+    }, 5000);
   }
 
   updateCurrentTime() {

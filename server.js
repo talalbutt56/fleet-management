@@ -27,6 +27,7 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Database Models
@@ -62,15 +63,15 @@ async function connectDB() {
   try {
     await mongoose.connect(MONGODB_URI, {
       useNewUrlParser: true,
-      useUnifiedTopology: true
+      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 5000
     });
-    console.log('Connected to MongoDB Atlas');
+    console.log('✅ Connected to MongoDB Atlas');
     
-    // Create indexes
     await Vehicle.createIndexes();
     await User.createIndexes();
   } catch (err) {
-    console.error('MongoDB connection error:', err);
+    console.error('❌ MongoDB connection error:', err);
     process.exit(1);
   }
 }
@@ -80,14 +81,15 @@ function setupSocketIO() {
   const changeStream = Vehicle.watch([], { fullDocument: 'updateLookup' });
   
   changeStream.on('change', (change) => {
+    console.log('🔔 Database change detected');
     io.emit('vehicle-update', change);
   });
 
   io.on('connection', (socket) => {
-    console.log('Client connected:', socket.id);
+    console.log(`⚡ Client connected: ${socket.id}`);
     
     socket.on('disconnect', () => {
-      console.log('Client disconnected:', socket.id);
+      console.log(`⚡ Client disconnected: ${socket.id}`);
     });
   });
 }
@@ -96,18 +98,30 @@ function setupSocketIO() {
 app.post('/api/auth', async (req, res) => {
   try {
     const { username, password } = req.body;
-    const user = await User.findOne({ username, password });
     
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    const user = await User.findOne({ 
+      username: username.trim(),
+      password: password.trim() 
+    });
+
     if (!user) {
+      console.log(`⚠️ Failed login attempt for: ${username}`);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    
+
+    console.log(`✅ Successful login for: ${user.username}`);
     res.json({
       username: user.username,
       role: user.role
     });
+
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('❌ Auth error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -116,6 +130,7 @@ app.get('/api/vehicles', async (req, res) => {
     const vehicles = await Vehicle.find().sort({ name: 1 });
     res.json(vehicles);
   } catch (err) {
+    console.error('❌ Failed to fetch vehicles:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -123,6 +138,7 @@ app.get('/api/vehicles', async (req, res) => {
 app.post('/api/init', async (req, res) => {
   try {
     if (req.headers.authorization !== `Bearer ${INIT_KEY}`) {
+      console.log('⚠️ Unauthorized initialization attempt');
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
@@ -169,12 +185,14 @@ app.post('/api/init', async (req, res) => {
       { username: "Jeff Smith", password: "JeffS333!", role: "operator" }
     ]);
 
+    console.log('✅ Database initialized successfully');
     res.json({ 
       message: "Database initialized", 
       vehicles: vehicles.length, 
       users: users.length 
     });
   } catch (err) {
+    console.error('❌ Initialization error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -186,7 +204,7 @@ app.get('*', (req, res) => {
 
 // Error handling
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('❌ Server error:', err.stack);
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
@@ -196,7 +214,7 @@ async function startServer() {
   setupSocketIO();
   
   httpServer.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
   });
 }
 

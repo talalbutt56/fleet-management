@@ -1,1 +1,58 @@
+:root {
+  --primary: #2c3e50;
+  --secondary: #3498db;
+  --danger: #e74c3c;
+  --success: #27ae60;
+  --warning: #f39c12;
+  --light: #ecf0f1;
+  --dark: #34495e;
+}
 
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Roboto', sans-serif;
+  background-color: #f5f7fa;
+  color: var(--primary);
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.loading {
+  padding: 2rem;
+  text-align: center;
+}
+
+/* Login Styles */
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: var(--primary);
+}
+
+.login-box {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  width: 90%;
+  max-width: 400px;
+}
+
+/* Dashboard Styles */
+.dashboard {
+  display: none;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+/* Add all other CSS styles from previous versions */

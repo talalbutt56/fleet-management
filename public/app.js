@@ -1,228 +1,150 @@
-document.addEventListener('DOMContentLoaded', function() {
-    // DOM Elements
-    const loginContainer = document.getElementById('login-container');
-    const dashboardContainer = document.getElementById('dashboard-container');
-    const loginForm = document.getElementById('login-form');
-    const logoutBtn = document.getElementById('logout-btn');
-    const vehiclesContainer = document.getElementById('vehicles-container');
-    const addVehicleBtn = document.getElementById('add-vehicle-btn');
-    const saveVehicleBtn = document.getElementById('save-vehicle-btn');
-    const addVehicleModal = new bootstrap.Modal(document.getElementById('addVehicleModal'));
-    
-    // Base URL for API - Update this with your Render URL
-    const API_BASE_URL = 'https://fleetmanagment.onrender.com/api';
-    
-    // Check if user is already logged in
-    checkAuthStatus();
-    
-    // Event Listeners
-    loginForm.addEventListener('submit', handleLogin);
-    logoutBtn.addEventListener('click', handleLogout);
-    addVehicleBtn.addEventListener('click', () => addVehicleModal.show());
-    saveVehicleBtn.addEventListener('click', handleAddVehicle);
-    
-    // Functions
-    async function checkAuthStatus() {
-        try {
-            const response = await fetch(`${API_BASE_URL}/auth/status`, {
-                credentials: 'include'
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                if (data.authenticated) {
-                    showDashboard();
-                    loadVehicles();
-                } else {
-                    showLogin();
-                }
-            } else {
-                showLogin();
-            }
-        } catch (error) {
-            console.error('Auth check failed:', error);
-            showLogin();
-        }
+// Configuration
+const API_BASE_URL = window.location.origin + '/api';
+
+// DOM Elements
+const loginContainer = document.getElementById('login-container');
+const dashboardContainer = document.getElementById('dashboard-container');
+
+// Initialize app
+document.addEventListener('DOMContentLoaded', initApp);
+
+async function initApp() {
+  try {
+    const isAuthenticated = await checkAuth();
+    if (isAuthenticated) {
+      showDashboard();
+      loadVehicles();
+    } else {
+      showLogin();
+      setupLoginForm();
     }
+    setupLogoutButton();
+  } catch (error) {
+    console.error('Initialization error:', error);
+    showError('Failed to initialize application');
+  }
+}
+
+// Authentication functions
+async function checkAuth() {
+  const response = await fetch(`${API_BASE_URL}/auth/status`, {
+    credentials: 'include'
+  });
+  return response.ok;
+}
+
+// UI Functions
+function showLogin() {
+  loginContainer.style.display = 'block';
+  dashboardContainer.style.display = 'none';
+  loginContainer.innerHTML = `
+    <div class="row justify-content-center mt-5">
+      <div class="col-md-6 col-lg-4">
+        <div class="card shadow">
+          <div class="card-body">
+            <h2 class="card-title text-center mb-4">Fleet Management Login</h2>
+            <form id="loginForm">
+              <div class="mb-3">
+                <input type="text" class="form-control" placeholder="Username" required>
+              </div>
+              <div class="mb-3">
+                <input type="password" class="form-control" placeholder="Password" required>
+              </div>
+              <button type="submit" class="btn btn-primary w-100">Login</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function showDashboard() {
+  loginContainer.style.display = 'none';
+  dashboardContainer.style.display = 'block';
+  dashboardContainer.innerHTML = `
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+      <div class="container">
+        <span class="navbar-brand">Fleet Management</span>
+        <button id="logoutBtn" class="btn btn-outline-light">Logout</button>
+      </div>
+    </nav>
+    <div class="container">
+      <div class="d-flex justify-content-between mb-4">
+        <h2>Vehicle Fleet</h2>
+        <button id="addVehicleBtn" class="btn btn-success">Add Vehicle</button>
+      </div>
+      <div id="vehicles-container"></div>
+    </div>
+  `;
+}
+
+// Vehicle functions
+async function loadVehicles() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/vehicles`, {
+      credentials: 'include'
+    });
     
-    async function handleLogin(e) {
-        e.preventDefault();
-        
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
-        
-        try {
-            const response = await fetch(`${API_BASE_URL}/auth/login`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ username, password }),
-                credentials: 'include'
-            });
-            
-            if (response.ok) {
-                showDashboard();
-                loadVehicles();
-            } else {
-                alert('Login failed. Please check your credentials.');
-            }
-        } catch (error) {
-            console.error('Login error:', error);
-            alert('An error occurred during login.');
-        }
+    if (response.ok) {
+      const vehicles = await response.json();
+      renderVehicles(vehicles);
+    } else {
+      showError('Failed to load vehicles');
     }
-    
-    async function handleLogout() {
-        try {
-            await fetch(`${API_BASE_URL}/auth/logout`, {
-                method: 'POST',
-                credentials: 'include'
-            });
-            showLogin();
-        } catch (error) {
-            console.error('Logout error:', error);
-        }
-    }
-    
-    async function loadVehicles() {
-        try {
-            const response = await fetch(`${API_BASE_URL}/vehicles`, {
-                credentials: 'include'
-            });
-            
-            if (response.ok) {
-                const vehicles = await response.json();
-                renderVehicles(vehicles);
-            } else {
-                console.error('Failed to load vehicles');
-            }
-        } catch (error) {
-            console.error('Error loading vehicles:', error);
-        }
-    }
-    
-    function renderVehicles(vehicles) {
-        vehiclesContainer.innerHTML = '';
-        
-        if (vehicles.length === 0) {
-            vehiclesContainer.innerHTML = '<p>No vehicles found. Add your first vehicle.</p>';
-            return;
-        }
-        
-        vehicles.forEach(vehicle => {
-            const tile = document.createElement('div');
-            tile.className = `vehicle-tile status-${vehicle.status.replace(/\s+/g, '-')}`;
-            
-            // Calculate due status for oil and safety
-            const today = new Date();
-            const oilDueDate = new Date(vehicle.oilChangeDue);
-            const safetyDueDate = new Date(vehicle.safetyDue);
-            
-            const oilDueClass = oilDueDate < today ? 'overdue' : 
-                               (oilDueDate - today) / (1000 * 60 * 60 * 24) < 30 ? 'due-soon' : '';
-                               
-            const safetyDueClass = safetyDueDate < today ? 'overdue' : 
-                                 (safetyDueDate - today) / (1000 * 60 * 60 * 24) < 30 ? 'due-soon' : '';
-            
-            tile.innerHTML = `
-                <h3>${vehicle.name}</h3>
-                <p><strong>Status:</strong> <span class="text-capitalize">${vehicle.status}</span></p>
-                <p><strong>Kilometers:</strong> ${vehicle.kilometers.toLocaleString()} km</p>
-                <p><strong>Oil Change Due:</strong> <span class="${oilDueClass}">${formatDate(vehicle.oilChangeDue)}</span></p>
-                <p><strong>Safety Due:</strong> <span class="${safetyDueClass}">${formatDate(vehicle.safetyDue)}</span></p>
-                <div class="mt-2">
-                    <button class="btn btn-sm btn-outline-primary me-2 edit-btn" data-id="${vehicle._id}">Edit</button>
-                    <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${vehicle._id}">Delete</button>
-                </div>
-            `;
-            
-            vehiclesContainer.appendChild(tile);
-        });
-        
-        // Add event listeners to edit and delete buttons
-        document.querySelectorAll('.edit-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => handleEditVehicle(e.target.dataset.id));
-        });
-        
-        document.querySelectorAll('.delete-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => handleDeleteVehicle(e.target.dataset.id));
-        });
-    }
-    
-    async function handleAddVehicle() {
-        const name = document.getElementById('vehicle-name').value;
-        const km = parseInt(document.getElementById('vehicle-km').value);
-        const oilChangeDue = document.getElementById('oil-change-due').value;
-        const safetyDue = document.getElementById('safety-due').value;
-        const status = document.getElementById('vehicle-status').value;
-        
-        try {
-            const response = await fetch(`${API_BASE_URL}/vehicles`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    name,
-                    kilometers: km,
-                    oilChangeDue,
-                    safetyDue,
-                    status
-                }),
-                credentials: 'include'
-            });
-            
-            if (response.ok) {
-                addVehicleModal.hide();
-                document.getElementById('add-vehicle-form').reset();
-                loadVehicles();
-            } else {
-                alert('Failed to add vehicle');
-            }
-        } catch (error) {
-            console.error('Error adding vehicle:', error);
-            alert('An error occurred while adding the vehicle');
-        }
-    }
-    
-    async function handleEditVehicle(vehicleId) {
-        // In a real app, you would implement this to edit vehicle details
-        alert(`Edit vehicle with ID: ${vehicleId}\nThis would open an edit modal in a complete implementation.`);
-    }
-    
-    async function handleDeleteVehicle(vehicleId) {
-        if (confirm('Are you sure you want to delete this vehicle?')) {
-            try {
-                const response = await fetch(`${API_BASE_URL}/vehicles/${vehicleId}`, {
-                    method: 'DELETE',
-                    credentials: 'include'
-                });
-                
-                if (response.ok) {
-                    loadVehicles();
-                } else {
-                    alert('Failed to delete vehicle');
-                }
-            } catch (error) {
-                console.error('Error deleting vehicle:', error);
-                alert('An error occurred while deleting the vehicle');
-            }
-        }
-    }
-    
-    function formatDate(dateString) {
-        const options = { year: 'numeric', month: 'short', day: 'numeric' };
-        return new Date(dateString).toLocaleDateString(undefined, options);
-    }
-    
-    function showLogin() {
-        loginContainer.style.display = 'block';
-        dashboardContainer.style.display = 'none';
-    }
-    
-    function showDashboard() {
-        loginContainer.style.display = 'none';
-        dashboardContainer.style.display = 'block';
-    }
-});
+  } catch (error) {
+    console.error('Error loading vehicles:', error);
+    showError('Network error occurred');
+  }
+}
+
+function renderVehicles(vehicles) {
+  const container = document.getElementById('vehicles-container');
+  container.innerHTML = vehicles.length === 0 ? 
+    '<p class="text-center">No vehicles found. Add your first vehicle.</p>' :
+    vehicles.map(vehicle => createVehicleCard(vehicle)).join('');
+}
+
+function createVehicleCard(vehicle) {
+  const today = new Date();
+  const oilDueDate = new Date(vehicle.oilChangeDue);
+  const safetyDueDate = new Date(vehicle.safetyDue);
+  
+  const oilStatus = getDueStatus(oilDueDate, today);
+  const safetyStatus = getDueStatus(safetyDueDate, today);
+
+  return `
+    <div class="card vehicle-card status-${vehicle.status.replace(/\s/g, '-')} mb-3">
+      <div class="card-body">
+        <h5 class="card-title">${vehicle.name}</h5>
+        <p class="card-text">
+          <strong>Status:</strong> <span class="text-capitalize">${vehicle.status}</span><br>
+          <strong>Mileage:</strong> ${vehicle.kilometers.toLocaleString()} km<br>
+          <strong>Oil Change:</strong> <span class="${oilStatus.class}">${formatDate(vehicle.oilChangeDue)} ${oilStatus.text}</span><br>
+          <strong>Safety Check:</strong> <span class="${safetyStatus.class}">${formatDate(vehicle.safetyDue)} ${safetyStatus.text}</span>
+        </p>
+        <div class="d-flex justify-content-end">
+          <button class="btn btn-sm btn-outline-primary me-2">Edit</button>
+          <button class="btn btn-sm btn-outline-danger">Delete</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Helper functions
+function formatDate(dateString) {
+  return new Date(dateString).toLocaleDateString();
+}
+
+function getDueStatus(dueDate, today) {
+  const diffDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+  
+  if (diffDays < 0) return { class: 'overdue', text: '(Overdue)' };
+  if (diffDays < 30) return { class: 'due-soon', text: '(Due soon)' };
+  return { class: '', text: '' };
+}
+
+function showError(message) {
+  alert(message); // In a real app, you'd use a better notification system
+}

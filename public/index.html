@@ -1,96 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fleet Management System</title>
-    <link rel="stylesheet" href="styles.css">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fleet Management</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <div id="app">
     <div id="login-container" class="container">
-        <div class="row justify-content-center">
-            <div class="col-md-6 col-lg-4">
-                <div class="card mt-5">
-                    <div class="card-body">
-                        <h2 class="card-title text-center">Fleet Management Login</h2>
-                        <form id="login-form">
-                            <div class="mb-3">
-                                <label for="username" class="form-label">Username</label>
-                                <input type="text" class="form-control" id="username" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="password" class="form-label">Password</label>
-                                <input type="password" class="form-control" id="password" required>
-                            </div>
-                            <button type="submit" class="btn btn-primary w-100">Login</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
+      <!-- Login form will be inserted by app.js -->
     </div>
-
-    <div id="dashboard-container" class="container" style="display: none;">
-        <header class="d-flex justify-content-between align-items-center py-3 mb-4 border-bottom">
-            <h1>Fleet Management Dashboard</h1>
-            <button id="logout-btn" class="btn btn-outline-danger">Logout</button>
-        </header>
-
-        <div class="row" id="vehicles-container">
-            <!-- Vehicle tiles will be added here dynamically -->
-        </div>
-
-        <div class="mt-4">
-            <button id="add-vehicle-btn" class="btn btn-success">Add New Vehicle</button>
-        </div>
+    <div id="dashboard-container" style="display: none;">
+      <!-- Dashboard will be inserted by app.js -->
     </div>
+  </div>
 
-    <!-- Add Vehicle Modal -->
-    <div class="modal fade" id="addVehicleModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Add New Vehicle</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="add-vehicle-form">
-                        <div class="mb-3">
-                            <label for="vehicle-name" class="form-label">Vehicle Name</label>
-                            <input type="text" class="form-control" id="vehicle-name" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="vehicle-km" class="form-label">Kilometers</label>
-                            <input type="number" class="form-control" id="vehicle-km" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="oil-change-due" class="form-label">Oil Change Due Date</label>
-                            <input type="date" class="form-control" id="oil-change-due" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="safety-due" class="form-label">Safety Due Date</label>
-                            <input type="date" class="form-control" id="safety-due" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="vehicle-status" class="form-label">Status</label>
-                            <select class="form-select" id="vehicle-status" required>
-                                <option value="on road">On Road</option>
-                                <option value="in shop">In Shop</option>
-                                <option value="out of service">Out of Service</option>
-                            </select>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="save-vehicle-btn">Save Vehicle</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

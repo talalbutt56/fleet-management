@@ -29,7 +29,7 @@ const User = mongoose.model('User', userSchema);
 const vehicleSchema = new mongoose.Schema({
   name: { type: String, required: true },
   kilometers: { type: Number, required: true },
-  oilChangeDue: { type: Number, required: true }, // Stores km until next change
+  oilChangeDue: { type: Number, required: true },
   safetyDue: { type: Date, required: true },
   status: { 
     type: String, 
@@ -43,15 +43,13 @@ const Vehicle = mongoose.model('Vehicle', vehicleSchema);
 
 // Auth Middleware
 const authenticate = async (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
-
   try {
+    const token = req.header('Authorization').replace('Bearer ', '');
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.userId = decoded.userId;
+    req.user = await User.findById(decoded.userId);
     next();
   } catch (err) {
-    res.status(401).json({ error: 'Invalid token' });
+    res.status(401).send({ error: 'Please authenticate' });
   }
 };
 
@@ -64,30 +62,35 @@ app.post('/api/register', async (req, res) => {
       password: hashedPassword
     });
     await user.save();
-    res.status(201).json({ message: 'User created' });
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
+    res.status(201).send({ token });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(400).send({ error: err.message });
   }
 });
 
 app.post('/api/login', async (req, res) => {
-  const user = await User.findOne({ username: req.body.username });
-  if (!user) return res.status(400).json({ error: 'Invalid credentials' });
-
-  const validPassword = await bcrypt.compare(req.body.password, user.password);
-  if (!validPassword) return res.status(400).json({ error: 'Invalid credentials' });
-
-  const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-  res.json({ token });
+  try {
+    const user = await User.findOne({ username: req.body.username });
+    if (!user) throw new Error('Invalid login credentials');
+    
+    const isMatch = await bcrypt.compare(req.body.password, user.password);
+    if (!isMatch) throw new Error('Invalid login credentials');
+    
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
+    res.send({ token });
+  } catch (err) {
+    res.status(400).send({ error: err.message });
+  }
 });
 
 // Vehicle Routes
 app.get('/api/vehicles', authenticate, async (req, res) => {
   try {
-    const vehicles = await Vehicle.find({ userId: req.userId });
-    res.json(vehicles);
+    const vehicles = await Vehicle.find({ userId: req.user._id });
+    res.send(vehicles);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).send({ error: err.message });
   }
 });
 
@@ -95,27 +98,14 @@ app.post('/api/vehicles', authenticate, async (req, res) => {
   try {
     const vehicle = new Vehicle({
       ...req.body,
-      userId: req.userId,
-      oilChangeDue: 5000, // Default 5000km for new vehicles
+      userId: req.user._id,
+      oilChangeDue: 5000, // Default 5000km until oil change
       safetyDue: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000) // 6 months from now
     });
     await vehicle.save();
-    res.status(201).json(vehicle);
+    res.status(201).send(vehicle);
   } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-app.put('/api/vehicles/:id', authenticate, async (req, res) => {
-  try {
-    const vehicle = await Vehicle.findOneAndUpdate(
-      { _id: req.params.id, userId: req.userId },
-      req.body,
-      { new: true }
-    );
-    res.json(vehicle);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(400).send({ error: err.message });
   }
 });
 

@@ -1,37 +1,62 @@
-:root {
-  --primary-color: #2c3e50;
-  --secondary-color: #3498db;
-  --success-color: #2ecc71;
-  --warning-color: #f39c12;
-  --danger-color: #e74c3c;
-}
-
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background-color: #f8f9fa;
 }
 
 .vehicle-card {
-  transition: transform 0.2s;
+  margin-bottom: 20px;
   border-left: 5px solid;
+  transition: transform 0.2s;
 }
 
 .vehicle-card:hover {
-  transform: translateY(-5px);
+  transform: translateY(-3px);
 }
 
-.status-on-road { border-color: var(--success-color); }
-.status-in-shop { border-color: var(--warning-color); }
-.status-out-of-service { border-color: var(--danger-color); }
+.status-on-road {
+  border-color: #28a745;
+}
 
-.due-soon { color: var(--warning-color); }
-.overdue { color: var(--danger-color); }
+.status-in-shop {
+  border-color: #ffc107;
+}
+
+.status-out-of-service {
+  border-color: #dc3545;
+}
+
+.oil-normal {
+  color: #28a745;
+}
+
+.oil-warning {
+  color: #ffc107;
+  font-weight: bold;
+}
+
+.oil-danger {
+  color: #dc3545;
+  font-weight: bold;
+}
+
+.safety-normal {
+  color: #28a745;
+}
+
+.safety-warning {
+  color: #ffc107;
+  font-weight: bold;
+}
+
+.safety-danger {
+  color: #dc3545;
+  font-weight: bold;
+}
 
 #vehicles-container {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 20px;
-  padding: 20px;
 }
 
 @media (max-width: 768px) {

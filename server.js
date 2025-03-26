@@ -13,12 +13,12 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Connect to MongoDB Atlas
+// MongoDB Atlas Connection
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('Connected to MongoDB Atlas'))
   .catch(err => console.error('Connection error:', err));
 
-// User Schema
+// User Schema (for pre-added users only)
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true }
@@ -29,7 +29,7 @@ const User = mongoose.model('User', userSchema);
 const vehicleSchema = new mongoose.Schema({
   name: { type: String, required: true },
   kilometers: { type: Number, required: true },
-  oilChangeDue: { type: Number, required: true },
+  oilChangeDue: { type: Number, required: true }, // km until next change
   safetyDue: { type: Date, required: true },
   status: { 
     type: String, 
@@ -41,56 +41,43 @@ const vehicleSchema = new mongoose.Schema({
 });
 const Vehicle = mongoose.model('Vehicle', vehicleSchema);
 
-// Auth Middleware
+// Authentication Middleware
 const authenticate = async (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
   try {
-    const token = req.header('Authorization').replace('Bearer ', '');
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = await User.findById(decoded.userId);
+    req.userId = decoded.userId;
     next();
   } catch (err) {
-    res.status(401).send({ error: 'Please authenticate' });
+    res.status(401).json({ error: 'Invalid token' });
   }
 };
 
-// Routes
-app.post('/api/register', async (req, res) => {
-  try {
-    const hashedPassword = await bcrypt.hash(req.body.password, 10);
-    const user = new User({
-      username: req.body.username,
-      password: hashedPassword
-    });
-    await user.save();
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
-    res.status(201).send({ token });
-  } catch (err) {
-    res.status(400).send({ error: err.message });
-  }
-});
-
+// Login Endpoint (Only this auth endpoint)
 app.post('/api/login', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.body.username });
-    if (!user) throw new Error('Invalid login credentials');
-    
-    const isMatch = await bcrypt.compare(req.body.password, user.password);
-    if (!isMatch) throw new Error('Invalid login credentials');
-    
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const validPassword = await bcrypt.compare(req.body.password, user.password);
+    if (!validPassword) return res.status(401).json({ error: 'Invalid credentials' });
+
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
-    res.send({ token });
+    res.json({ token });
   } catch (err) {
-    res.status(400).send({ error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// Vehicle Routes
+// Vehicle Routes (protected)
 app.get('/api/vehicles', authenticate, async (req, res) => {
   try {
-    const vehicles = await Vehicle.find({ userId: req.user._id });
-    res.send(vehicles);
+    const vehicles = await Vehicle.find({ userId: req.userId });
+    res.json(vehicles);
   } catch (err) {
-    res.status(500).send({ error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -98,14 +85,14 @@ app.post('/api/vehicles', authenticate, async (req, res) => {
   try {
     const vehicle = new Vehicle({
       ...req.body,
-      userId: req.user._id,
+      userId: req.userId,
       oilChangeDue: 5000, // Default 5000km until oil change
       safetyDue: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000) // 6 months from now
     });
     await vehicle.save();
-    res.status(201).send(vehicle);
+    res.status(201).json(vehicle);
   } catch (err) {
-    res.status(400).send({ error: err.message });
+    res.status(400).json({ error: err.message });
   }
 });
 

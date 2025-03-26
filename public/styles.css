@@ -1,58 +1,41 @@
+:root {
+  --primary-color: #2c3e50;
+  --secondary-color: #3498db;
+  --success-color: #2ecc71;
+  --warning-color: #f39c12;
+  --danger-color: #e74c3c;
+}
+
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #f8f9fa;
-    color: #333;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f8f9fa;
 }
 
-.card {
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    border: none;
+.vehicle-card {
+  transition: transform 0.2s;
+  border-left: 5px solid;
 }
 
-.vehicle-tile {
-    background-color: white;
-    border-radius: 8px;
-    padding: 20px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s;
+.vehicle-card:hover {
+  transform: translateY(-5px);
 }
 
-.vehicle-tile:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
+.status-on-road { border-color: var(--success-color); }
+.status-in-shop { border-color: var(--warning-color); }
+.status-out-of-service { border-color: var(--danger-color); }
 
-.status-on-road {
-    border-left: 5px solid #28a745;
-}
-
-.status-in-shop {
-    border-left: 5px solid #ffc107;
-}
-
-.status-out-of-service {
-    border-left: 5px solid #dc3545;
-}
-
-.due-soon {
-    color: #ffc107;
-    font-weight: bold;
-}
-
-.overdue {
-    color: #dc3545;
-    font-weight: bold;
-}
+.due-soon { color: var(--warning-color); }
+.overdue { color: var(--danger-color); }
 
 #vehicles-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+  padding: 20px;
 }
 
 @media (max-width: 768px) {
-    #vehicles-container {
-        grid-template-columns: 1fr;
-    }
+  #vehicles-container {
+    grid-template-columns: 1fr;
+  }
 }

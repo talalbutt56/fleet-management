@@ -1,11 +1,13 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
+const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const cookieParser = require('cookie-parser');
 
-// Initialize Express app
+// Initialize app
 const app = express();
 
 // Middleware
@@ -15,57 +17,43 @@ app.use(cors({
   credentials: true
 }));
 app.use(morgan('dev'));
+app.use(cookieParser());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
 
-// MongoDB Atlas Connection
+// Database connection
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
-    });
-    console.log('MongoDB Atlas connected successfully');
+    await mongoose.connect(process.env.MONGODB_URI);
+    console.log('MongoDB connected successfully');
   } catch (err) {
     console.error('MongoDB connection error:', err);
     process.exit(1);
   }
 };
 
-// Basic Routes
-app.get('/', (req, res) => {
-  res.json({ 
-    message: 'Fleet Management API',
-    status: 'running',
-    timestamp: new Date().toISOString()
-  });
+// Routes
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/vehicles', require('./routes/vehicles'));
+
+// Serve frontend
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'healthy' });
-});
-
-// Error Handling Middleware
+// Error handling
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
+  res.status(500).send('Something broke!');
 });
 
-// Server Startup
+// Start server
 const PORT = process.env.PORT || 10000;
 const startServer = async () => {
   await connectDB();
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   });
 };
 
 startServer();
-
-// Handle shutdown gracefully
-process.on('SIGINT', async () => {
-  await mongoose.connection.close();
-  console.log('MongoDB connection closed');
-  process.exit(0);
-});

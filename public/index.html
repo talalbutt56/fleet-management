@@ -5,19 +5,155 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fleet Management</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <style>
+    .vehicle-card {
+      border-left: 5px solid;
+      margin-bottom: 15px;
+    }
+    .status-on-road { border-color: #28a745; }
+    .status-in-shop { border-color: #ffc107; }
+    .status-out-of-service { border-color: #dc3545; }
+    .due-soon { color: #ffc107; }
+    .overdue { color: #dc3545; }
+  </style>
 </head>
 <body>
-  <div id="app">
-    <div id="login-container" class="container">
-      <!-- Login form will be inserted by app.js -->
+  <div class="container mt-4">
+    <div id="login-section">
+      <div class="card" style="max-width: 400px; margin: 0 auto;">
+        <div class="card-body">
+          <h2 class="text-center mb-4">Login</h2>
+          <form id="loginForm">
+            <div class="mb-3">
+              <input type="text" class="form-control" placeholder="Username" required>
+            </div>
+            <div class="mb-3">
+              <input type="password" class="form-control" placeholder="Password" required>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Login</button>
+          </form>
+        </div>
+      </div>
     </div>
-    <div id="dashboard-container" style="display: none;">
-      <!-- Dashboard will be inserted by app.js -->
+
+    <div id="dashboard-section" style="display: none;">
+      <div class="d-flex justify-content-between mb-4">
+        <h1>Fleet Dashboard</h1>
+        <button id="logoutBtn" class="btn btn-outline-danger">Logout</button>
+      </div>
+      
+      <div class="mb-4">
+        <button id="addVehicleBtn" class="btn btn-success">Add Vehicle</button>
+      </div>
+      
+      <div id="vehicles-container" class="row"></div>
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="app.js"></script>
+  <script>
+    // Configuration
+    const API_URL = window.location.origin + '/api';
+
+    // DOM Elements
+    const loginSection = document.getElementById('login-section');
+    const dashboardSection = document.getElementById('dashboard-section');
+    const vehiclesContainer = document.getElementById('vehicles-container');
+    const loginForm = document.getElementById('loginForm');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const addVehicleBtn = document.getElementById('addVehicleBtn');
+
+    // Initialize
+    checkAuth();
+
+    // Event Listeners
+    loginForm.addEventListener('submit', handleLogin);
+    logoutBtn.addEventListener('click', handleLogout);
+    addVehicleBtn.addEventListener('click', showAddVehicleForm);
+
+    // Functions
+    function checkAuth() {
+      // In a real app, check authentication status
+      showDashboard();
+      loadVehicles();
+    }
+
+    function handleLogin(e) {
+      e.preventDefault();
+      showDashboard();
+      loadVehicles();
+    }
+
+    function handleLogout() {
+      showLogin();
+    }
+
+    function showLogin() {
+      loginSection.style.display = 'block';
+      dashboardSection.style.display = 'none';
+    }
+
+    function showDashboard() {
+      loginSection.style.display = 'none';
+      dashboardSection.style.display = 'block';
+    }
+
+    async function loadVehicles() {
+      try {
+        const response = await fetch(`${API_URL}/vehicles`);
+        const vehicles = await response.json();
+        renderVehicles(vehicles);
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to load vehicles');
+      }
+    }
+
+    function renderVehicles(vehicles) {
+      vehiclesContainer.innerHTML = vehicles.map(vehicle => `
+        <div class="col-md-4">
+          <div class="card vehicle-card status-${vehicle.status.replace(/\s/g, '-')}">
+            <div class="card-body">
+              <h5>${vehicle.name}</h5>
+              <p>Status: ${vehicle.status}</p>
+              <p>KM: ${vehicle.kilometers}</p>
+              <p>Oil Due: ${formatDate(vehicle.oilChangeDue)}</p>
+              <p>Safety Due: ${formatDate(vehicle.safetyDue)}</p>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function showAddVehicleForm() {
+      const name = prompt('Vehicle name:');
+      if (name) {
+        addVehicle({
+          name,
+          kilometers: 0,
+          oilChangeDue: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          safetyDue: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+          status: 'on road'
+        });
+      }
+    }
+
+    async function addVehicle(vehicle) {
+      try {
+        await fetch(`${API_URL}/vehicles`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(vehicle)
+        });
+        loadVehicles();
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to add vehicle');
+      }
+    }
+
+    function formatDate(date) {
+      return new Date(date).toLocaleDateString();
+    }
+  </script>
 </body>
 </html>

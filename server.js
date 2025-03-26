@@ -1,59 +1,63 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
-const path = require('path');
 const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
-const cookieParser = require('cookie-parser');
+const path = require('path');
 
 // Initialize app
 const app = express();
 
 // Middleware
-app.use(helmet());
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true
-}));
-app.use(morgan('dev'));
-app.use(cookieParser());
+app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Database connection
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log('MongoDB connected successfully');
-  } catch (err) {
-    console.error('MongoDB connection error:', err);
-    process.exit(1);
-  }
-};
+// Connect to MongoDB Atlas
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log('Connected to MongoDB'))
+  .catch(err => console.error('Connection error:', err));
 
-// Routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/vehicles', require('./routes/vehicles'));
+// Simple Vehicle Model
+const Vehicle = mongoose.model('Vehicle', {
+  name: String,
+  kilometers: Number,
+  oilChangeDue: Date,
+  safetyDue: Date,
+  status: String
+});
+
+// Mock authentication (replace with real auth in production)
+app.post('/api/login', (req, res) => {
+  res.json({ success: true, message: 'Logged in (mock)' });
+});
+
+// Vehicle API
+app.get('/api/vehicles', async (req, res) => {
+  try {
+    const vehicles = await Vehicle.find();
+    res.json(vehicles);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/vehicles', async (req, res) => {
+  try {
+    const vehicle = new Vehicle(req.body);
+    await vehicle.save();
+    res.status(201).json(vehicle);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
 
 // Serve frontend
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Error handling
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).send('Something broke!');
-});
-
 // Start server
 const PORT = process.env.PORT || 10000;
-const startServer = async () => {
-  await connectDB();
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-};
-
-startServer();
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});

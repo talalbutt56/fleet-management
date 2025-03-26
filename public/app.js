@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const addVehicleModal = new bootstrap.Modal(document.getElementById('addVehicleModal'));
     
     // Base URL for API - Update this with your Render URL
-    const API_BASE_URL = 'https://your-render-app.onrender.com/api';
+    const API_BASE_URL = 'https://fleetmanagment.onrender.com/api';
     
     // Check if user is already logged in
     checkAuthStatus();
